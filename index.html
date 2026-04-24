@@ -63,20 +63,23 @@ button { padding:8px; margin-top:10px; border:none; border-radius:6px; font-weig
 <script>
 let products = [];
 let lastResult = [];
+let counter = 0;
 
+// ===== ADD PRODUCT (FIX ID BUG) =====
 function addProduct(){
- const id = Date.now();
+ const id = Date.now() + "_" + (counter++); // UNIQUE ID
+
  products.push(id);
 
  document.getElementById("products").innerHTML += `
  <div id="p_${id}" class="grid">
-   <input placeholder="Nama" id="name_${id}">
+   <input placeholder="Nama Produk" id="name_${id}">
    <input placeholder="P(cm)" id="p_${id}_p">
    <input placeholder="L(cm)" id="p_${id}_l">
    <input placeholder="T(cm)" id="p_${id}_t">
    <input placeholder="KG/pcs" id="p_${id}_kg">
    <input placeholder="Qty" id="p_${id}_qty">
-   <button class="remove" onclick="removeProduct(${id})">X</button>
+   <button class="remove" onclick="removeProduct('${id}')">X</button>
  </div><br>`;
 }
 
@@ -87,6 +90,7 @@ function removeProduct(id){
 
 function vol(p,l,t){ return (p*l*t)/1000000; }
 
+// ===== MODE SWITCH =====
 function toggleMode(){
  const mode = document.getElementById("cost_mode").value;
  total_cost.style.display = mode==="manual" ? "block":"none";
@@ -94,11 +98,13 @@ function toggleMode(){
  rate_kg.style.display = mode==="kg" ? "block":"none";
 }
 
+// ===== MAIN CALC =====
 function hitung(){
+
  let data = [];
 
  products.forEach(id=>{
-   let name = document.getElementById("name_"+id).value || "Produk";
+   let name = (document.getElementById("name_"+id).value || "Produk").trim();
    let p = +document.getElementById("p_"+id+"_p").value||0;
    let l = +document.getElementById("p_"+id+"_l").value||0;
    let t = +document.getElementById("p_"+id+"_t").value||0;
@@ -122,12 +128,12 @@ function hitung(){
  let totalCost = 0;
 
  if(modeCost==="manual"){
-   totalCost = +total_cost.value||0;
+   totalCost = +document.getElementById("total_cost").value||0;
  }else if(modeCost==="cbm"){
-   let rate = +rate_cbm.value||0;
+   let rate = +document.getElementById("rate_cbm").value||0;
    totalCost = totalVol * rate;
  }else if(modeCost==="kg"){
-   let rate = +rate_kg.value||0;
+   let rate = +document.getElementById("rate_kg").value||0;
    totalCost = totalKg * rate;
  }
 
@@ -142,19 +148,23 @@ function hitung(){
  html += `Distribusi: ${distribute.toUpperCase()}<br><br>`;
 
  lastResult = [];
-
  let assigned = 0;
 
  data.forEach((d,i)=>{
+
    let ratio = distribute==="cbm"
-     ? (totalVol? d.totalVol/totalVol:0)
-     : (totalKg? d.totalKg/totalKg:0);
+     ? (totalVol ? d.totalVol/totalVol : 0)
+     : (totalKg ? d.totalKg/totalKg : 0);
 
-   let costTotal = (i===data.length-1)
-     ? totalCost - assigned
-     : Math.round(ratio * totalCost);
+   let costTotal;
 
-   assigned += costTotal;
+   // ===== FIX ROUNDING (TOTAL ALWAYS MATCH) =====
+   if(i === data.length - 1){
+     costTotal = totalCost - assigned;
+   } else {
+     costTotal = Math.round(ratio * totalCost);
+     assigned += costTotal;
+   }
 
    let per = d.qty ? costTotal / d.qty : 0;
 
@@ -177,8 +187,12 @@ function hitung(){
  document.getElementById("output").innerHTML = html;
 }
 
+// ===== EXPORT CSV =====
 function exportCSV(){
- if(lastResult.length===0){ alert("Hitung dulu"); return; }
+ if(lastResult.length===0){
+   alert("Klik Hitung dulu");
+   return;
+ }
 
  let headers = Object.keys(lastResult[0]).join(",");
  let rows = lastResult.map(r=>Object.values(r).join(","));
@@ -193,6 +207,7 @@ function exportCSV(){
  a.click();
 }
 
+// INIT
 addProduct();
 addProduct();
 toggleMode();
