@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Kalkulator CBM Multi SKU PRO</title>
+
+<style>
+body { font-family: Arial; background:#0f172a; color:#fff; padding:20px; }
+.container { max-width:1000px; margin:auto; }
+.card { background:#1e293b; padding:15px; border-radius:10px; margin-bottom:15px; }
+input, select { width:100%; padding:6px; margin-top:4px; border-radius:6px; border:none; }
+button { padding:8px; margin-top:10px; border:none; border-radius:6px; font-weight:bold; }
+.add { background:#3b82f6; }
+.calc { background:#22c55e; width:100%; }
+.export { background:#f59e0b; width:100%; }
+.remove { background:#ef4444; }
+.result { background:#020617; padding:10px; border-radius:8px; margin-top:10px; }
+.grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h2>Kalkulator Ongkir CBM & KG (Multi SKU PRO)</h2>
+
+<div class="card">
+<div id="products"></div>
+<button class="add" onclick="addProduct()">+ Tambah Produk</button>
+</div>
+
+<div class="card">
+<h3>Forwarder</h3>
+
+<select id="cost_mode" onchange="toggleMode()">
+  <option value="manual">Manual (Total Ongkir)</option>
+  <option value="cbm">Auto by CBM</option>
+  <option value="kg">Auto by KG</option>
+</select>
+
+<input id="total_cost" placeholder="Total Ongkir (Manual)">
+<input id="rate_cbm" placeholder="Rate per CBM (Rp)">
+<input id="rate_kg" placeholder="Rate per KG (Rp)">
+
+<select id="distribute_mode">
+  <option value="auto">Distribusi AUTO</option>
+  <option value="cbm">Distribusi CBM</option>
+  <option value="kg">Distribusi KG</option>
+</select>
+
+<button class="calc" onclick="hitung()">Hitung</button>
+<button class="export" onclick="exportCSV()">Export CSV</button>
+</div>
+
+<div class="card">
+<h3>Hasil</h3>
+<div id="output" class="result"></div>
+</div>
+
+</div>
+
+<script>
+let products = [];
+let lastResult = [];
+
+function addProduct(){
+ const id = Date.now();
+ products.push(id);
+
+ document.getElementById("products").innerHTML += `
+ <div id="p_${id}" class="grid">
+   <input placeholder="Nama" id="name_${id}">
+   <input placeholder="P(cm)" id="p_${id}_p">
+   <input placeholder="L(cm)" id="p_${id}_l">
+   <input placeholder="T(cm)" id="p_${id}_t">
+   <input placeholder="KG/pcs" id="p_${id}_kg">
+   <input placeholder="Qty" id="p_${id}_qty">
+   <button class="remove" onclick="removeProduct(${id})">X</button>
+ </div><br>`;
+}
+
+function removeProduct(id){
+ products = products.filter(x=>x!==id);
+ document.getElementById("p_"+id).remove();
+}
+
+function vol(p,l,t){ return (p*l*t)/1000000; }
+
+function toggleMode(){
+ const mode = document.getElementById("cost_mode").value;
+ total_cost.style.display = mode==="manual" ? "block":"none";
+ rate_cbm.style.display = mode==="cbm" ? "block":"none";
+ rate_kg.style.display = mode==="kg" ? "block":"none";
+}
+
+function hitung(){
+ let data = [];
+
+ products.forEach(id=>{
+   let name = document.getElementById("name_"+id).value || "Produk";
+   let p = +document.getElementById("p_"+id+"_p").value||0;
+   let l = +document.getElementById("p_"+id+"_l").value||0;
+   let t = +document.getElementById("p_"+id+"_t").value||0;
+   let kg = +document.getElementById("p_"+id+"_kg").value||0;
+   let qty = +document.getElementById("p_"+id+"_qty").value||0;
+
+   let v = vol(p,l,t);
+
+   data.push({
+     name,
+     totalVol: v * qty,
+     totalKg: kg * qty,
+     qty
+   });
+ });
+
+ let totalVol = data.reduce((a,b)=>a+b.totalVol,0);
+ let totalKg = data.reduce((a,b)=>a+b.totalKg,0);
+
+ let modeCost = document.getElementById("cost_mode").value;
+ let totalCost = 0;
+
+ if(modeCost==="manual"){
+   totalCost = +total_cost.value||0;
+ }else if(modeCost==="cbm"){
+   let rate = +rate_cbm.value||0;
+   totalCost = totalVol * rate;
+ }else if(modeCost==="kg"){
+   let rate = +rate_kg.value||0;
+   totalCost = totalKg * rate;
+ }
+
+ let distribute = document.getElementById("distribute_mode").value;
+
+ if(distribute==="auto"){
+   let volWeight = totalVol * 1000;
+   distribute = volWeight > totalKg ? "cbm":"kg";
+ }
+
+ let html = `Total Ongkir: Rp ${Math.round(totalCost)}<br>`;
+ html += `Distribusi: ${distribute.toUpperCase()}<br><br>`;
+
+ lastResult = [];
+
+ let assigned = 0;
+
+ data.forEach((d,i)=>{
+   let ratio = distribute==="cbm"
+     ? (totalVol? d.totalVol/totalVol:0)
+     : (totalKg? d.totalKg/totalKg:0);
+
+   let costTotal = (i===data.length-1)
+     ? totalCost - assigned
+     : Math.round(ratio * totalCost);
+
+   assigned += costTotal;
+
+   let per = d.qty ? costTotal / d.qty : 0;
+
+   lastResult.push({
+     nama:d.name,
+     cbm:d.totalVol.toFixed(4),
+     kg:d.totalKg.toFixed(2),
+     qty:d.qty,
+     ongkir_total:Math.round(costTotal),
+     ongkir_pcs:Math.round(per)
+   });
+
+   html += `
+   <b>${d.name}</b><br>
+   CBM: ${d.totalVol.toFixed(4)} | KG: ${d.totalKg.toFixed(2)}<br>
+   Ongkir total: Rp ${Math.round(costTotal)}<br>
+   Ongkir/pcs: Rp ${Math.round(per)}<br><br>`;
+ });
+
+ document.getElementById("output").innerHTML = html;
+}
+
+function exportCSV(){
+ if(lastResult.length===0){ alert("Hitung dulu"); return; }
+
+ let headers = Object.keys(lastResult[0]).join(",");
+ let rows = lastResult.map(r=>Object.values(r).join(","));
+ let csv = [headers,...rows].join("\n");
+
+ let blob = new Blob([csv], {type:"text/csv"});
+ let url = URL.createObjectURL(blob);
+
+ let a=document.createElement("a");
+ a.href=url;
+ a.download="ongkir_multi_sku_pro.csv";
+ a.click();
+}
+
+addProduct();
+addProduct();
+toggleMode();
+</script>
+
+</body>
+</html>
